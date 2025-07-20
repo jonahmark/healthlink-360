@@ -2,6 +2,7 @@ const db = require('../config/db');
 
 // Create or update doctor profile
 const upsertDoctorProfile = async (req, res) => {
+  console.log('upsertDoctorProfile called', req.method, req.user && req.user.id, req.body);
   try {
     const userId = req.user.id;
     const { name, specialty, bio, experience_years, education, certifications, consultation_fee, available_days, available_hours } = req.body;
@@ -31,6 +32,7 @@ const upsertDoctorProfile = async (req, res) => {
       return res.status(201).json({ message: 'Doctor profile created successfully' });
     }
   } catch (error) {
+    console.error('RAW ERROR:', error);
     console.error('Doctor profile upsert error details:', {
       message: error.message,
       code: error.code,

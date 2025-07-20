@@ -1,5 +1,6 @@
 const axios = require('axios');
 const mysql = require('mysql2/promise');
+const jwt = require('jsonwebtoken');
 
 const API_BASE = 'http://localhost:5000/api';
 
@@ -20,12 +21,19 @@ const dbConfig = {
   database: process.env.DB_NAME || 'healthlink',
 };
 
-async function setAdminRoleDirectly() {
+async function setAdminRoleDirectlyAndPrint() {
   let conn;
   try {
     conn = await mysql.createConnection(dbConfig);
     const [rows] = await conn.execute('UPDATE users SET role = ? WHERE email = ?', ['admin', users.admin.email]);
     results.push({ endpoint: 'set admin role (SQL)', status: 'OK', code: rows.affectedRows });
+    // Fetch and print the admin user record after update
+    const [adminRows] = await conn.execute('SELECT id, name, email, role FROM users WHERE email = ?', [users.admin.email]);
+    if (adminRows.length > 0) {
+      console.log('\n[ADMIN USER RECORD AFTER UPDATE]:', adminRows[0]);
+    } else {
+      console.log('\n[ADMIN USER RECORD AFTER UPDATE]: Not found');
+    }
   } catch (e) {
     results.push({ endpoint: 'set admin role (SQL)', status: 'FAIL', error: e.message });
   } finally {
@@ -33,71 +41,68 @@ async function setAdminRoleDirectly() {
   }
 }
 
-async function register(role) {
+async function registerAndSetRole(role) {
   try {
     const res = await axios.post(`${API_BASE}/auth/register`, users[role]);
     results.push({ endpoint: `register (${role})`, status: 'OK', code: res.status });
-    // If admin, update role directly in DB and re-login for fresh token
     if (role === 'admin') {
-      await setAdminRoleDirectly();
+      await setAdminRoleDirectlyAndPrint();
       // Wait a moment for DB update to propagate
-      await new Promise(r => setTimeout(r, 200));
+      await new Promise(r => setTimeout(r, 1000));
     }
-    // If doctor, update via admin endpoint (after admin is set)
-    if (role === 'doctor') {
-      // Login as admin to get admin token
-      let adminToken;
-      try {
-        const adminLogin = await axios.post(`${API_BASE}/auth/login`, { email: users.admin.email, password: users.admin.password });
-        adminToken = adminLogin.data.token;
-      } catch (e) {
-        results.push({ endpoint: 'admin login for role update', status: 'SKIP', error: 'Admin not available yet' });
-        return res.data.token;
-      }
-      // Get user id by logging in as the new user
-      let userId;
-      try {
-        const loginRes = await axios.post(`${API_BASE}/auth/login`, { email: users[role].email, password: users[role].password });
-        userId = loginRes.data.user.id;
-      } catch (e) {
-        results.push({ endpoint: `get id for ${role}`, status: 'FAIL', error: e.response?.data?.message || e.message });
-        return res.data.token;
-      }
-      // Update role via admin endpoint
-      try {
-        await axios.put(`${API_BASE}/admin/users/${userId}/role`, { role }, { headers: { Authorization: `Bearer ${adminToken}` } });
-        results.push({ endpoint: `set role (${role})`, status: 'OK' });
-      } catch (e) {
-        results.push({ endpoint: `set role (${role})`, status: 'FAIL', error: e.response?.data?.message || e.message });
-      }
-    }
-    return res.data.token;
+    return true;
   } catch (e) {
     results.push({ endpoint: `register (${role})`, status: 'FAIL', error: e.response?.data?.message || e.message });
-    return null;
+    return false;
   }
 }
 
 async function login(role) {
   try {
     const res = await axios.post(`${API_BASE}/auth/login`, { email: users[role].email, password: users[role].password });
+    if (role === 'admin') {
+      console.log('\n[ADMIN JWT TOKEN]:', res.data.token);
+      const decoded = jwt.decode(res.data.token);
+      console.log('[ADMIN JWT PAYLOAD]:', decoded);
+    }
     return res.data.token;
   } catch (e) {
-    // If user not found, try to register then login again
-    if (e.response?.data?.message === 'Invalid email or password' || e.response?.data?.message === 'User not found') {
-      await register(role);
-      try {
-        const res2 = await axios.post(`${API_BASE}/auth/login`, { email: users[role].email, password: users[role].password });
-        return res2.data.token;
-      } catch (e2) {
-        results.push({ endpoint: `login (${role})`, status: 'FAIL', error: e2.response?.data?.message || e2.message });
-        return null;
-      }
-    } else {
-      results.push({ endpoint: `login (${role})`, status: 'FAIL', error: e.response?.data?.message || e.message });
-      return null;
-    }
+    results.push({ endpoint: `login (${role})`, status: 'FAIL', error: e.response?.data?.message || e.message });
+    return null;
   }
+}
+
+async function registerAndLoginAll() {
+  const tokens = {};
+  // Register and set admin role first
+  await registerAndSetRole('admin');
+  tokens.admin = await login('admin');
+  // Register and login user
+  await registerAndSetRole('user');
+  tokens.user = await login('user');
+  // Register and login doctor (role will be set via admin endpoint after admin is available)
+  await registerAndSetRole('doctor');
+  // Set doctor role via admin endpoint
+  if (tokens.admin) {
+    // Login as doctor to get user id
+    let doctorId;
+    try {
+      const loginRes = await axios.post(`${API_BASE}/auth/login`, { email: users.doctor.email, password: users.doctor.password });
+      doctorId = loginRes.data.user.id;
+    } catch (e) {
+      results.push({ endpoint: 'get id for doctor', status: 'FAIL', error: e.response?.data?.message || e.message });
+    }
+    if (doctorId) {
+      try {
+        await axios.put(`${API_BASE}/admin/users/${doctorId}/role`, { role: 'doctor' }, { headers: { Authorization: `Bearer ${tokens.admin}` } });
+        results.push({ endpoint: 'set role (doctor)', status: 'OK' });
+      } catch (e) {
+        results.push({ endpoint: 'set role (doctor)', status: 'FAIL', error: e.response?.data?.message || e.message });
+      }
+    }
+    tokens.doctor = await login('doctor');
+  }
+  return tokens;
 }
 
 async function testEndpoint({ method, url, data, token, expect = 200, label }) {
@@ -112,15 +117,8 @@ async function testEndpoint({ method, url, data, token, expect = 200, label }) {
 }
 
 async function runTests() {
-  // Login as each role (auto-register if needed)
-  const tokens = {};
-  for (const role of Object.keys(users)) {
-    tokens[role] = await login(role);
-    // After admin role is set, re-login to get a fresh token with correct role
-    if (role === 'admin') {
-      tokens.admin = await login('admin');
-    }
-  }
+  // Register, set roles, and login all users in correct order
+  const tokens = await registerAndLoginAll();
 
   // Public endpoints
   await testEndpoint({ method: 'get', url: '/doctors', label: 'List Doctors' });
