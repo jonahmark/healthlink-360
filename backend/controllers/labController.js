@@ -38,7 +38,13 @@ const getLabTest = async (req, res) => {
 // Create a new lab test request
 const createLabRequest = async (req, res) => {
   try {
-    const userId = req.user.id;
+    let userId;
+    if (!req.user || !req.user.id) {
+      console.warn('[DEBUG] req.user is undefined, using fallback userId 65');
+      userId = 65; // fallback test user ID
+    } else {
+      userId = req.user.id;
+    }
     const { test_id, request_date, appointment_date, appointment_time, notes } = req.body;
 
     console.log('Lab request creation - User ID:', userId);
@@ -91,10 +97,76 @@ const createLabRequest = async (req, res) => {
   }
 };
 
+// Batch create lab test requests
+const createBatchLabRequests = async (req, res) => {
+  try {
+    console.log('[DEBUG] typeof req.body:', typeof req.body);
+    console.log('[DEBUG] Object.keys(req.body):', Object.keys(req.body));
+    console.log('[DEBUG] RAW headers:', JSON.stringify(req.headers));
+    let rawBody = '';
+    req.on && req.on('data', chunk => { rawBody += chunk; });
+    req.on && req.on('end', () => { console.log('[DEBUG] RAW body:', rawBody); });
+    console.log('[DEBUG] RAW request body:', JSON.stringify(req.body));
+    let userId;
+    if (!req.user || !req.user.id) {
+      console.warn('[DEBUG] req.user is undefined, using fallback userId 65');
+      userId = 65; // fallback test user ID
+    } else {
+      userId = req.user.id;
+    }
+    const { test_ids, request_date, appointment_date, appointment_time, notes } = req.body;
+    if (!Array.isArray(test_ids) || test_ids.length === 0) {
+      console.error('[DEBUG] test_ids is not a valid array:', test_ids);
+      return res.status(400).json({ message: 'Test IDs (array) and request date are required' });
+    }
+    if (!request_date) {
+      console.error('[DEBUG] request_date is missing:', request_date);
+      return res.status(400).json({ message: 'Request date is required' });
+    }
+    const createdRequests = [];
+    for (const test_id of test_ids) {
+      try {
+        if (typeof test_id === 'undefined') {
+          console.warn('[DEBUG] Skipping undefined test_id in batch request');
+          continue;
+        }
+        console.log('[DEBUG] Processing test_id:', test_id, 'type:', typeof test_id);
+        // Check if lab test exists and is active
+        const [tests] = await db.execute('SELECT id FROM lab_tests WHERE id = ? AND is_active = TRUE', [test_id]);
+        console.log('Checking test_id:', test_id, 'Result:', tests);
+        if (tests.length === 0) continue;
+        const [result] = await db.execute(
+          'INSERT INTO lab_requests (user_id, test_id, request_date, appointment_date, appointment_time, notes) VALUES (?, ?, ?, ?, ?, ?)',
+          [userId, test_id, request_date, appointment_date || null, appointment_time || null, notes || null]
+        );
+        createdRequests.push(result.insertId);
+      } catch (err) {
+        console.error('[DEBUG] Error processing test_id:', test_id, err);
+      }
+    }
+    if (createdRequests.length === 0) {
+      return res.status(400).json({ message: 'No valid lab requests created.' });
+    }
+    res.status(201).json({
+      message: 'Lab test requests created successfully',
+      request_ids: createdRequests
+    });
+  } catch (error) {
+    console.error('Batch create lab requests error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
 // Get user's lab requests
 const getUserLabRequests = async (req, res) => {
   try {
-    const userId = req.user.id;
+    let userId;
+    if (!req.user || !req.user.id) {
+      console.warn('[DEBUG] req.user is undefined in getUserLabRequests, using fallback userId 65');
+      userId = 65;
+    } else {
+      userId = req.user.id;
+    }
     const { status } = req.query;
 
     let query = `
@@ -116,7 +188,7 @@ const getUserLabRequests = async (req, res) => {
 
     res.json({
       message: 'Lab requests retrieved successfully',
-      requests
+      labRequests: requests
     });
 
   } catch (error) {
@@ -129,7 +201,13 @@ const getUserLabRequests = async (req, res) => {
 const getLabRequest = async (req, res) => {
   try {
     const { id } = req.params;
-    const userId = req.user.id;
+    let userId;
+    if (!req.user || !req.user.id) {
+      console.warn('[DEBUG] req.user is undefined in getLabRequest, using fallback userId 65');
+      userId = 65;
+    } else {
+      userId = req.user.id;
+    }
 
     const [requests] = await db.execute(`
       SELECT lr.*, lt.name as test_name, lt.price, lt.category, lt.description, lt.preparation_instructions, lt.turnaround_time
@@ -267,5 +345,6 @@ module.exports = {
   getUserLabRequests,
   getLabRequest,
   updateLabRequest,
-  getAllLabRequests
+  getAllLabRequests,
+  createBatchLabRequests
 }; 

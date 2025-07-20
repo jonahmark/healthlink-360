@@ -40,7 +40,7 @@ const PatientDashboard = () => {
       setTipIndex((prev) => (prev + 1) % healthTips.length);
     }, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, [healthTips.length]);
 
   const fetchDashboardData = async () => {
     try {
@@ -75,7 +75,7 @@ const PatientDashboard = () => {
         navigate('/book-appointment');
         break;
       case 'lab-tests':
-        navigate('/lab-tests');
+        navigate('/patient/lab-tests');
         break;
       case 'view-records':
         setActiveTab('records');

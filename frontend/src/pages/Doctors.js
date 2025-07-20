@@ -1,6 +1,6 @@
 import React from 'react';
 
-const doctors = [
+export const doctors = [
   {
     name: 'Dr. Grace Namaganda',
     specialty: 'Cardiologist',

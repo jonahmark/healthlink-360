@@ -13,7 +13,7 @@ import DoctorDashboard from './pages/doctor/DoctorDashboard';
 import PatientDashboard from './pages/PatientDashboard';
 import DoctorProfile from './pages/DoctorProfile';
 import BookAppointment from './pages/BookAppointment';
-import LabTests from './pages/LabTests';
+import LabTests from './pages/patient/LabTests';
 import AdminDashboard from './pages/AdminDashboard';
 import Doctors from './pages/Doctors';
 
@@ -146,7 +146,14 @@ const AppContent = () => {
           </ProtectedRoute>
         } 
       />
-      <Route path="/lab-tests" element={<LabTests />} />
+      <Route 
+        path="/patient/lab-tests" 
+        element={
+          <ProtectedRoute allowedRoles={['user', 'premium']}>
+            <LabTests />
+          </ProtectedRoute>
+        } 
+      />
 
       {/* Catch all route */}
       <Route path="*" element={<Navigate to="/" replace />} />

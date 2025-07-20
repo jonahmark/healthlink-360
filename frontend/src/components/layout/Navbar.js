@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { BellIcon, UserCircleIcon, Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline';
 import DarkModeToggle from '../ui/DarkModeToggle';
-import { Fragment, useRef } from 'react';
+import { Fragment } from 'react';
 import { Menu, Transition } from '@headlessui/react';
 
 const mockNotifications = [
@@ -33,7 +33,7 @@ const Navbar = () => {
   const navLinks = (
     <>
       <Link to="/" className="text-white hover:bg-blue-700 hover:text-cyan-200 px-3 py-2 rounded-md text-sm font-medium transition block">Home</Link>
-      <Link to="/lab-tests" className="text-white hover:bg-blue-700 hover:text-cyan-200 px-3 py-2 rounded-md text-sm font-medium transition block">Lab Tests</Link>
+      <Link to="/patient/lab-tests" className="text-white hover:bg-blue-700 hover:text-cyan-200 px-3 py-2 rounded-md text-sm font-medium transition block">Lab Tests</Link>
       <Link to="/doctors" className="text-white hover:bg-blue-700 hover:text-cyan-200 px-3 py-2 rounded-md text-sm font-medium transition block">Doctors</Link>
       {isAuthenticated ? (
         <>
@@ -123,7 +123,7 @@ const Navbar = () => {
         <div className="flex justify-between h-16 items-center">
           <div className="flex items-center">
             <Link to="/" className="flex-shrink-0 flex items-center">
-              {/* Removed logo image */}
+              <img src="/image%20.jpg" alt="HealthLink Logo" className="h-10 w-10 rounded-full object-cover mr-3 shadow" />
               <span className="text-3xl font-extrabold bg-gradient-to-r from-white via-cyan-100 to-blue-100 bg-clip-text text-transparent tracking-tight drop-shadow-sm">
                 HealthLink <span className="font-black">360</span>
               </span>

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { doctors as doctorsList } from '../Doctors';
 
 const BookAppointment = () => {
-  const [doctors, setDoctors] = useState([]);
   const [selectedDoctor, setSelectedDoctor] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedTime, setSelectedTime] = useState('');
@@ -10,19 +10,16 @@ const BookAppointment = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    // TODO: Fetch available doctors from API
-    setDoctors([
-      { id: 1, name: 'Dr. Sarah Johnson', specialization: 'General Medicine' },
-      { id: 2, name: 'Dr. Michael Chen', specialization: 'Cardiology' },
-      { id: 3, name: 'Dr. Emily Davis', specialization: 'Pediatrics' }
-    ]);
-  }, []);
+  // Use doctorsList directly for the dropdown
+  const doctors = doctorsList.map((doc) => ({
+    id: doc.name + '-' + doc.specialty,
+    name: doc.name,
+    specialization: doc.specialty
+  }));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    
     // TODO: Book appointment via API
     setTimeout(() => {
       setLoading(false);

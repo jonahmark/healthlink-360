@@ -1,12 +1,34 @@
 import axios from 'axios';
 
-// Create axios instance with base configuration
+// Force API base URL to localhost backend
+const API_BASE_URL = 'http://localhost:5000/api';
+console.log('[API CONFIG] Using API base URL:', API_BASE_URL);
 const api = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000/api',
+  baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
 });
+
+// Debug: Log all API requests
+api.interceptors.request.use(
+  (config) => {
+    console.log('[API REQUEST]', config.method?.toUpperCase(), config.baseURL + config.url, config.data || '');
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Debug: Show a clear error if the backend is unreachable
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.code === 'ERR_NETWORK' || error.message.includes('Network Error')) {
+      alert('Cannot reach backend at ' + API_BASE_URL + '. Please check your backend server and network settings.');
+    }
+    return Promise.reject(error);
+  }
+);
 
 // Request interceptor to add auth token
 api.interceptors.request.use(
@@ -63,10 +85,12 @@ export const bookingAPI = {
 
 // Lab API calls
 export const labAPI = {
-  createLabRequest: (requestData) => api.post('/lab-requests', requestData),
-  getUserLabRequests: () => api.get('/lab-requests'),
-  getLabRequestById: (id) => api.get(`/lab-requests/${id}`),
-  updateLabRequest: (id, data) => api.put(`/lab-requests/${id}`, data),
+  createLabRequest: (requestData) => api.post('/lab/requests', requestData),
+  getUserLabRequests: () => api.get('/lab/requests'),
+  getLabRequestById: (id) => api.get(`/lab/requests/${id}`),
+  updateLabRequest: (id, data) => api.put(`/lab/requests/${id}`, data),
+  getAvailableLabTests: () => api.get('/lab/tests'),
+  createBatchLabRequests: (data) => api.post('/lab/requests/batch', JSON.stringify(data), { headers: { 'Content-Type': 'application/json' } }),
 };
 
 // Notification API calls

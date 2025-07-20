@@ -20,6 +20,16 @@ const PORT = process.env.PORT || 5000;
 app.use(cors()); 
 app.use(express.json());
 
+// Log all incoming request headers and bodies
+app.use((req, res, next) => {
+  let rawBody = '';
+  req.on('data', chunk => { rawBody += chunk; });
+  req.on('end', () => { console.log('[GLOBAL DEBUG] RAW body:', rawBody); });
+  console.log('[GLOBAL DEBUG] Method:', req.method, 'URL:', req.originalUrl);
+  console.log('[GLOBAL DEBUG] Headers:', JSON.stringify(req.headers));
+  next();
+});
+
 // Import routes
 const testRoutes = require('./routes/test');
 const authRoutes = require('./routes/auth');
@@ -41,6 +51,12 @@ app.use('/api/lab', labRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/patients', patientsRoutes);
+
+// Global error handler
+app.use((err, req, res, next) => {
+  console.error('[GLOBAL ERROR HANDLER]', err);
+  res.status(500).json({ message: 'Internal server error', error: err.message });
+});
 
 // Test route
 app.get('/', (req, res) => {

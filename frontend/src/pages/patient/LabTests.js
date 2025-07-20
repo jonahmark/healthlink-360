@@ -1,24 +1,44 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { labAPI } from '../../utils/api';
+import toast, { Toaster } from 'react-hot-toast';
 
 const LabTests = () => {
   const [tests, setTests] = useState([]);
   const [selectedTests, setSelectedTests] = useState([]);
   const [selectedDate, setSelectedDate] = useState('');
+  const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
+  const [confirmation, setConfirmation] = useState(false);
+  const [error, setError] = useState('');
+  const [showModal, setShowModal] = useState(false);
+  const [history, setHistory] = useState([]);
   const navigate = useNavigate();
 
   useEffect(() => {
-    // TODO: Fetch available lab tests from API
-    setTests([
-      { id: 1, name: 'Complete Blood Count (CBC)', price: 20000, description: 'Measures red blood cells, white blood cells, and platelets' },
-      { id: 2, name: 'Blood Glucose Test', price: 25000, description: 'Measures blood sugar levels' },
-      { id: 3, name: 'Cholesterol Panel', price: 30000, description: 'Measures total cholesterol, HDL, LDL, and triglycerides' },
-      { id: 4, name: 'Liver Function Test', price: 40000, description: 'Measures liver enzymes and proteins' },
-      { id: 5, name: 'Kidney Function Test', price: 35000, description: 'Measures kidney function and waste products' },
-      { id: 6, name: 'Thyroid Function Test', price: 50000, description: 'Measures thyroid hormone levels' }
-    ]);
+    const fetchTests = async () => {
+      try {
+        setLoading(true);
+        const response = await labAPI.getAvailableLabTests(undefined, { params: { t: Date.now() } });
+        setTests(response.data.tests || []);
+      } catch (err) {
+        setError('Failed to load lab tests.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchTests();
+    fetchHistory();
   }, []);
+
+  const fetchHistory = async () => {
+    try {
+      const response = await labAPI.getUserLabRequests();
+      setHistory(response.data.labRequests || response.data.requests || []);
+    } catch (err) {
+      console.error('Failed to fetch lab request history:', err?.response?.data || err.message);
+    }
+  };
 
   const handleTestToggle = (testId) => {
     setSelectedTests(prev => 
@@ -35,30 +55,104 @@ const LabTests = () => {
     }, 0);
   };
 
+  const isRequestEnabled = selectedTests.length > 0 && selectedDate && new Date(selectedDate) >= new Date(new Date().toISOString().split('T')[0]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
-    
-    // TODO: Book lab tests via API
-    setTimeout(() => {
-      setLoading(false);
-      navigate('/patient/dashboard');
-    }, 1000);
+    setShowModal(true);
   };
+
+  const handleConfirm = async () => {
+    setShowModal(false);
+    setLoading(true);
+    setError('');
+    try {
+      console.log('Requesting lab tests with:', {
+        url: 'http://localhost:5000/api/lab/requests/batch',
+        test_ids: selectedTests,
+        request_date: selectedDate,
+        notes
+      });
+      await labAPI.createBatchLabRequests({
+        test_ids: selectedTests,
+        request_date: selectedDate,
+        notes
+      });
+      setConfirmation(true);
+      setSelectedTests([]);
+      setSelectedDate('');
+      setNotes('');
+      toast.success('Lab test request submitted!');
+      fetchHistory();
+    } catch (err) {
+      let backendMsg = err?.response?.data?.message || err.message || 'Failed to request lab tests. Please try again.';
+      if (err?.response?.status === 401 || err?.response?.status === 403) {
+        backendMsg = 'You are not authorized. Please log out and log in again as a patient.';
+      }
+      if (backendMsg.includes('A listener indicated an asynchronous response by returning true')) {
+        backendMsg = 'A browser extension is interfering with requests. Please disable all browser extensions and try again.';
+      }
+      setError(backendMsg);
+      toast.error(backendMsg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (confirmation) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-50 via-cyan-50 to-green-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+        <Toaster />
+        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl border-2 border-green-400 dark:border-green-700 p-10 flex flex-col items-center">
+          <span className="text-5xl mb-4">✅</span>
+          <h1 className="text-3xl font-bold text-green-700 dark:text-green-300 mb-2">Lab Test Request Submitted!</h1>
+          <p className="text-gray-700 dark:text-gray-200 mb-4 text-center">Your lab test request has been received. You will be notified once your appointment is confirmed.</p>
+          <button onClick={() => navigate('/patient/dashboard')} className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition">Back to Dashboard</button>
+          <div className="mt-8 w-full">
+            <h2 className="text-xl font-bold mb-2 text-blue-800 dark:text-cyan-200">Your Lab Request History</h2>
+            <div className="overflow-x-auto">
+              <table className="min-w-full bg-white dark:bg-gray-800 rounded-xl shadow">
+                <thead>
+                  <tr>
+                    <th className="px-4 py-2 text-left text-xs text-gray-500 dark:text-gray-300">Test</th>
+                    <th className="px-4 py-2 text-left text-xs text-gray-500 dark:text-gray-300">Date</th>
+                    <th className="px-4 py-2 text-left text-xs text-gray-500 dark:text-gray-300">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {history.map(req => (
+                    <tr key={req.id} className="border-t">
+                      <td className="px-4 py-2 font-medium text-gray-900 dark:text-cyan-200">{req.test_name}</td>
+                      <td className="px-4 py-2 text-gray-700 dark:text-gray-300">{req.request_date}</td>
+                      <td className="px-4 py-2">
+                        <span className={`px-2 py-1 rounded text-xs font-semibold ${req.status === 'completed' ? 'bg-green-100 dark:bg-green-700 text-green-700 dark:text-green-200' : 'bg-yellow-100 dark:bg-yellow-700 text-yellow-700 dark:text-yellow-200'}`}>{req.status}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-cyan-50 to-green-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 py-8">
+      <Toaster />
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-blue-800 dark:text-cyan-200 drop-shadow">Book Lab Tests</h1>
-          <p className="text-cyan-700 dark:text-cyan-100">Schedule laboratory tests and diagnostic procedures</p>
+          <h1 className="text-3xl font-bold text-blue-800 dark:text-cyan-200 drop-shadow">Request Lab Tests</h1>
+          <p className="text-cyan-700 dark:text-cyan-100">Select the lab tests you need and submit your request.</p>
+          {error && <div className="text-red-500 mt-2">{error}</div>}
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Available Tests */}
           <div className="lg:col-span-2">
             <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl border-2 border-blue-100 dark:border-cyan-700">
               <div className="px-6 py-4 border-b border-blue-100 dark:border-cyan-700">
-                <h2 className="text-xl font-semibold text-blue-700 dark:text-cyan-200">Available Tests</h2>
+                <h2 className="text-xl font-semibold text-blue-700 dark:text-cyan-200">Available Lab Tests</h2>
               </div>
               <div className="p-6">
                 <div className="space-y-4">
@@ -92,15 +186,14 @@ const LabTests = () => {
           <div className="lg:col-span-1">
             <div className="bg-blue-50 dark:bg-gray-800 rounded-xl shadow-xl border-2 border-blue-200 dark:border-cyan-700 sticky top-8">
               <div className="px-6 py-4 border-b border-blue-100 dark:border-cyan-700">
-                <h2 className="text-xl font-semibold text-blue-700 dark:text-cyan-200">Booking Summary</h2>
+                <h2 className="text-xl font-semibold text-blue-700 dark:text-cyan-200">Your Request</h2>
               </div>
               <div className="p-6">
+                <div className="space-y-3 mb-6">
                 {selectedTests.length === 0 ? (
                   <p className="text-gray-500 dark:text-gray-300 text-center py-8">No tests selected</p>
                 ) : (
-                  <>
-                    <div className="space-y-3 mb-6">
-                      {selectedTests.map(testId => {
+                    selectedTests.map(testId => {
                         const test = tests.find(t => t.id === testId);
                         return test ? (
                           <div key={test.id} className="flex justify-between items-center">
@@ -108,7 +201,8 @@ const LabTests = () => {
                             <span className="text-sm font-medium text-blue-800 dark:text-cyan-200">UGX {parseFloat(test.price).toLocaleString()}</span>
                           </div>
                         ) : null;
-                      })}
+                    })
+                  )}
                     </div>
                     <div className="border-t border-blue-200 dark:border-cyan-700 pt-4 mb-6">
                       <div className="flex justify-between items-center">
@@ -126,20 +220,79 @@ const LabTests = () => {
                           onChange={(e) => setSelectedDate(e.target.value)}
                           className="mt-1 block w-full border border-blue-200 dark:border-cyan-700 rounded-lg shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:focus:ring-cyan-400 focus:border-blue-400 dark:focus:border-cyan-400 bg-blue-50 dark:bg-gray-800 text-gray-900 dark:text-cyan-200"
                           required
+                      min={new Date().toISOString().split('T')[0]}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="notes" className="block text-sm font-medium text-blue-700 dark:text-cyan-200">Additional Notes (Optional)</label>
+                    <textarea
+                      id="notes"
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      rows={3}
+                      className="mt-1 block w-full border border-blue-200 dark:border-cyan-700 rounded-lg shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:focus:ring-cyan-400 focus:border-blue-400 dark:focus:border-cyan-400 bg-blue-50 dark:bg-gray-800 text-gray-900 dark:text-cyan-200"
+                      placeholder="Any additional information for the lab..."
                         />
                       </div>
                       <button
                         type="submit"
-                        disabled={loading || selectedTests.length === 0}
-                        className="w-full bg-gradient-to-r from-blue-600 to-cyan-400 hover:from-blue-700 hover:to-cyan-500 text-white font-medium py-3 px-8 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg transition"
+                    disabled={loading || !isRequestEnabled}
+                    className={`w-full bg-gradient-to-r from-green-600 to-blue-400 hover:from-green-700 hover:to-blue-500 text-white font-medium py-3 px-8 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 shadow-lg transition ${(!isRequestEnabled || loading) ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >
-                        {loading ? 'Booking...' : 'Book Tests'}
+                    {loading ? (<span className="flex items-center justify-center"><span className="loader mr-2"></span>Requesting...</span>) : 'Request Lab Tests'}
                       </button>
+                  {!isRequestEnabled && (
+                    <div className="text-xs text-red-500 text-center mt-2">Select at least one test and a date to enable the request button.</div>
+                  )}
                     </form>
-                  </>
+                {/* Confirmation Modal */}
+                {showModal && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+                    <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl p-8 max-w-md w-full">
+                      <h2 className="text-xl font-bold mb-4 text-blue-800 dark:text-cyan-200">Confirm Lab Test Request</h2>
+                      <ul className="mb-4 list-disc list-inside text-gray-700 dark:text-gray-200">
+                        {selectedTests.map(testId => {
+                          const test = tests.find(t => t.id === testId);
+                          return test ? <li key={test.id}>{test.name}</li> : null;
+                        })}
+                      </ul>
+                      <div className="mb-4 text-gray-700 dark:text-gray-200">Date: <b>{selectedDate}</b></div>
+                      {notes && <div className="mb-4 text-gray-700 dark:text-gray-200">Notes: <b>{notes}</b></div>}
+                      <div className="flex justify-end gap-4">
+                        <button onClick={() => setShowModal(false)} className="px-4 py-2 rounded bg-gray-300 dark:bg-gray-700 text-gray-800 dark:text-gray-200 font-semibold">Cancel</button>
+                        <button onClick={handleConfirm} className="px-4 py-2 rounded bg-green-600 text-white font-semibold hover:bg-green-700 transition">Confirm</button>
+                      </div>
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
+          </div>
+        </div>
+        {/* Always show request history below */}
+        <div className="mt-12">
+          <h2 className="text-xl font-bold mb-2 text-blue-800 dark:text-cyan-200">Your Lab Request History</h2>
+          <div className="overflow-x-auto">
+            <table className="min-w-full bg-white dark:bg-gray-800 rounded-xl shadow">
+              <thead>
+                <tr>
+                  <th className="px-4 py-2 text-left text-xs text-gray-500 dark:text-gray-300">Test</th>
+                  <th className="px-4 py-2 text-left text-xs text-gray-500 dark:text-gray-300">Date</th>
+                  <th className="px-4 py-2 text-left text-xs text-gray-500 dark:text-gray-300">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.map(req => (
+                  <tr key={req.id} className="border-t">
+                    <td className="px-4 py-2 font-medium text-gray-900 dark:text-cyan-200">{req.test_name}</td>
+                    <td className="px-4 py-2 text-gray-700 dark:text-gray-300">{req.request_date}</td>
+                    <td className="px-4 py-2">
+                      <span className={`px-2 py-1 rounded text-xs font-semibold ${req.status === 'completed' ? 'bg-green-100 dark:bg-green-700 text-green-700 dark:text-green-200' : 'bg-yellow-100 dark:bg-yellow-700 text-yellow-700 dark:text-yellow-200'}`}>{req.status}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>

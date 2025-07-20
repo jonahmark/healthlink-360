@@ -70,7 +70,6 @@ const sampleTests = [
 const LabTests = () => {
   const [availableTests, setAvailableTests] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
 
   useEffect(() => {
     // Simulate API call, fallback to sampleTests

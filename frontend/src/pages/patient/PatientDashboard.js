@@ -60,12 +60,23 @@ const PatientDashboard = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-cyan-50 to-green-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Personalized Greeting */}
-        <div className="mb-4">
-          <h1 className="text-2xl font-bold text-blue-800 dark:text-cyan-200 drop-shadow">{getGreeting()}, {user?.name?.split(' ')[0] || 'Patient'}!</h1>
+        {/* Health Tip Section - Highly Noticeable */}
+        <div className="mb-8 flex flex-col items-center justify-center">
+          <div className="w-full md:w-2/3 lg:w-1/2">
+            <div className="bg-gradient-to-tr from-green-200 via-blue-100 to-white dark:from-cyan-900 dark:via-gray-800 dark:to-gray-900 rounded-2xl shadow-2xl border-4 border-green-300 dark:border-cyan-700 p-6 flex flex-col items-center justify-center">
+              <div className="flex items-center mb-2">
+                <span className="text-4xl md:text-5xl mr-3">💡</span>
+                <h2 className="text-2xl md:text-3xl font-bold text-green-700 dark:text-green-200">Health Tip</h2>
+              </div>
+              <div className="text-lg md:text-xl text-center font-semibold text-blue-900 dark:text-cyan-100 mb-2 animate-pulse">
+                {healthTips[tipIndex]}
+              </div>
+              <div className="text-xs text-gray-500 dark:text-gray-300">(Rotates every 10 seconds)</div>
+            </div>
+          </div>
         </div>
-        {/* Profile Card & Health Tip */}
-        <div className="flex flex-col md:flex-row items-center gap-6 mb-8">
+        {/* Personalized Greeting and Profile Card */}
+        <div className="mb-8 flex flex-col md:flex-row items-center gap-6">
           <div className="flex items-center gap-4 bg-white dark:bg-gray-900 rounded-2xl shadow-xl border-2 border-blue-100 dark:border-cyan-700 p-4 w-full md:w-auto">
             <span className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-blue-200 via-cyan-100 to-green-100 dark:from-cyan-900 dark:via-gray-800 dark:to-gray-900 text-blue-700 dark:text-cyan-200 text-3xl font-bold shadow-lg">
               {user?.name?.charAt(0) || 'P'}
@@ -78,12 +89,6 @@ const PatientDashboard = () => {
               </div>
             </div>
             <Link to="/patient/profile" className="ml-auto px-3 py-1 rounded bg-blue-50 dark:bg-gray-800 text-blue-700 dark:text-cyan-200 hover:bg-blue-100 dark:hover:bg-gray-700 text-sm font-semibold transition">Edit Profile</Link>
-          </div>
-          {/* Health Tips Card */}
-          <div className="flex-1 bg-gradient-to-tr from-green-100 via-blue-50 to-white dark:from-cyan-900 dark:via-gray-800 dark:to-gray-900 rounded-2xl shadow-xl border-2 border-green-100 dark:border-cyan-700 p-4 flex flex-col items-center justify-center min-w-[250px]">
-            <div className="text-green-600 dark:text-green-300 text-2xl mb-2">💡</div>
-            <div className="text-gray-800 dark:text-cyan-200 text-center font-medium">{healthTips[tipIndex]}</div>
-            <div className="text-xs text-gray-400 dark:text-gray-300 mt-2">Health Tip</div>
           </div>
         </div>
         {/* Notifications Section */}

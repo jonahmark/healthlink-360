@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { api } from '../utils/api';
 import Loading from '../components/ui/Loading';
+import { api } from '../utils/api';
 
 const BookAppointment = () => {
   const [formData, setFormData] = useState({
@@ -10,7 +10,6 @@ const BookAppointment = () => {
     reason: '',
     notes: ''
   });
-
   const [doctors, setDoctors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -21,47 +20,40 @@ const BookAppointment = () => {
     '14:00:00', '14:30:00', '15:00:00', '15:30:00', '16:00:00', '16:30:00'
   ];
 
-  // Fetch available doctors from API
   useEffect(() => {
     const fetchDoctors = async () => {
       try {
         setLoading(true);
         const response = await api.get('/doctors');
         setDoctors(response.data.doctors);
-      } catch (error) {
-        console.error('Error fetching doctors:', error);
-        setError('Failed to load doctors. Please try again.');
+      } catch (err) {
+        setError('Failed to load doctors.');
       } finally {
         setLoading(false);
       }
     };
-
     fetchDoctors();
   }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
     if (!formData.doctorId || !formData.appointmentDate || !formData.appointmentTime) {
       setError('Please fill in all required fields.');
       return;
     }
-
     setSubmitting(true);
     setError('');
-
     try {
-      const response = await api.post('/bookings', {
+      const selectedDoctor = doctors.find(d => String(d.id) === formData.doctorId);
+      await api.post('/bookings', {
         doctor_id: formData.doctorId,
+        doctor_name: selectedDoctor ? selectedDoctor.name : '',
+        doctor_specialty: selectedDoctor ? selectedDoctor.specialty : '',
         appointment_date: formData.appointmentDate,
         appointment_time: formData.appointmentTime,
         reason: formData.reason,
         notes: formData.notes
       });
-
-      console.log('Appointment booked:', response.data);
-      
-      // Reset form
       setFormData({
         doctorId: '',
         appointmentDate: '',
@@ -69,10 +61,8 @@ const BookAppointment = () => {
         reason: '',
         notes: ''
       });
-      
       alert('Appointment booked successfully! You will receive a confirmation shortly.');
     } catch (error) {
-      console.error('Error booking appointment:', error);
       setError(error.response?.data?.message || 'Failed to book appointment. Please try again.');
     } finally {
       setSubmitting(false);
@@ -84,10 +74,7 @@ const BookAppointment = () => {
       ...formData,
       [e.target.name]: e.target.value
     });
-    // Clear error when user starts typing
-    if (error) {
-      setError('');
-    }
+    if (error) setError('');
   };
 
   const formatTimeSlot = (time) => {
@@ -188,7 +175,7 @@ const BookAppointment = () => {
               />
             </div>
             {/* Submit Button */}
-            <div className="flex justify-end">
+            <div>
               <button
                 type="submit"
                 disabled={submitting}
